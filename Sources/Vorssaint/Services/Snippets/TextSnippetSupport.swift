@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vorssaint
 
+import CoreGraphics
 import Foundation
 
 /// One text snippet: typing the trigger inserts the replacement. Stored as
@@ -119,6 +120,23 @@ enum TextSnippetSupport {
     static func bufferAppending(_ buffer: String, typed: String) -> String {
         let next = buffer + typed
         return String(next.suffix(bufferLimit))
+    }
+
+    /// The system's "Select the previous input source" and "Select next
+    /// source in Input menu" shortcuts.
+    static let inputSourceShortcutIDs: Set<Int32> = [60, 61]
+
+    /// Whether a ⌘ or ⌃ key press is the enabled shortcut that switches the
+    /// keyboard layout. Such a press is not a command: a trigger like
+    /// ";почта" is typed across it, ";" on one layout and the rest on the
+    /// other, so the buffer has to keep what came before.
+    static func switchesInputSource(keyCode: Int64, flags: CGEventFlags,
+                                    shortcuts: [LiveSystemShortcut]) -> Bool {
+        let pressed = GlobalShortcut(keyCode: keyCode, modifiers: GlobalShortcutModifiers(cgFlags: flags))
+        return shortcuts.contains {
+            $0.enabled && $0.shortcut == pressed
+                && (!$0.requiresFunctionKey || flags.contains(.maskSecondaryFn))
+        }
     }
 
     /// The snippet whose trigger the buffer just completed for the given

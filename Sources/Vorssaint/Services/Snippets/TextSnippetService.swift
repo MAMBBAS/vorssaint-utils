@@ -36,6 +36,9 @@ final class TextSnippetService {
     /// Split by expansion mode at load time; the tap callback only scans.
     private var immediateSnippets: [TextSnippet] = []
     private var delimiterSnippets: [TextSnippet] = []
+    /// The layout-switch shortcuts, read with the snippets so the tap
+    /// callback never asks the WindowServer.
+    private var inputSourceShortcuts: [LiveSystemShortcut] = []
 
     private init() {
         SessionActivity.shared.onChange { [weak self] _ in self?.syncWithPreferences() }
@@ -122,9 +125,11 @@ final class TextSnippetService {
     private func reloadSnippets() {
         let all = TextSnippetSupport.decode(
             UserDefaults.standard.data(forKey: DefaultsKey.textSnippets))
+        let layoutSwitches = SymbolicHotKeys.entries(for: TextSnippetSupport.inputSourceShortcutIDs) ?? []
         inputLock.withLock {
             immediateSnippets = all.filter { $0.enabled && $0.expansion == .immediate }
             delimiterSnippets = all.filter { $0.enabled && $0.expansion == .afterDelimiter }
+            inputSourceShortcuts = layoutSwitches
         }
     }
 
@@ -303,9 +308,16 @@ final class TextSnippetService {
             resetBuffer()
             return Unmanaged.passUnretained(event)
         }
-        // Shortcuts are commands, not text.
+        // Shortcuts are commands, not text. The layout switch is the one
+        // exception: the trigger is typed across it.
         if !event.flags.intersection([.maskCommand, .maskControl]).isEmpty {
-            resetBuffer()
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            inputLock.withLock {
+                if !TextSnippetSupport.switchesInputSource(keyCode: keyCode, flags: event.flags,
+                                                           shortcuts: inputSourceShortcuts) {
+                    buffer = ""
+                }
+            }
             return Unmanaged.passUnretained(event)
         }
 

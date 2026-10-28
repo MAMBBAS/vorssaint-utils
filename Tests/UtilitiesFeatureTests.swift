@@ -635,6 +635,39 @@ enum UtilitiesFeatureTests {
         suite.expect(!TextSnippetSupport.completes(";e", trigger: ";email", ignoresCase: true),
                "a buffer shorter than the trigger never completes it")
 
+        // A trigger like ";почта" is typed across a layout switch: ";" on ABC,
+        // ⌘Space, the rest on Russian. The switch must not cost the ";".
+        let layoutSwitches = [
+            LiveSystemShortcut(id: 60, keyCode: Int64(kVK_Space), flags: .maskCommand, enabled: true),
+            LiveSystemShortcut(id: 61, keyCode: Int64(kVK_Space), flags: [.maskCommand, .maskAlternate],
+                               enabled: false),
+            LiveSystemShortcut(id: 60, keyCode: Int64(kVK_ANSI_L), flags: [.maskControl, .maskSecondaryFn],
+                               enabled: true)
+        ]
+        suite.expect(TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_Space), flags: .maskCommand,
+                                                            shortcuts: layoutSwitches),
+               "the enabled layout switch keeps the half-typed trigger")
+        suite.expect(TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_Space),
+                                                            flags: [.maskCommand, .maskAlphaShift],
+                                                            shortcuts: layoutSwitches),
+               "Caps Lock does not hide the layout switch")
+        suite.expect(!TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_Space),
+                                                             flags: [.maskCommand, .maskAlternate],
+                                                             shortcuts: layoutSwitches),
+               "a disabled layout switch is an ordinary shortcut")
+        suite.expect(!TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_ANSI_C), flags: .maskCommand,
+                                                             shortcuts: layoutSwitches),
+               "other shortcuts still clear the trigger")
+        suite.expect(!TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_ANSI_L), flags: .maskControl,
+                                                             shortcuts: layoutSwitches),
+               "a layout switch that needs fn does not match without it")
+        suite.expect(TextSnippetSupport.switchesInputSource(keyCode: Int64(kVK_ANSI_L),
+                                                            flags: [.maskControl, .maskSecondaryFn],
+                                                            shortcuts: layoutSwitches),
+               "a layout switch that needs fn matches with it")
+        suite.expect(TextSnippetSupport.inputSourceShortcutIDs == [60, 61],
+               "both the previous and the next input source shortcuts count")
+
         let storedSnippets = [email, dateSnippet, caseless]
         suite.expect(TextSnippetSupport.decode(TextSnippetSupport.encode(storedSnippets)) == storedSnippets,
                "snippets round-trip through persistence")
